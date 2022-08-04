@@ -486,7 +486,7 @@ where
         }
 
         if self.inner_has_subscriber_filter && outer_hint.is_none() {
-            return None;
+            return inner_hint;
         }
 
         cmp::max(outer_hint, inner_hint)
