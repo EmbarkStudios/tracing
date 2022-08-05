@@ -303,6 +303,7 @@ mod registry_tests {
             let collector = crate::registry()
                 .with(NopSubscriber.with_filter(LevelFilter::WARN))
                 .with(NopSubscriber.with_filter(LevelFilter::DEBUG))
+                .with(NopSubscriber)
                 .with(NopSubscriber.with_filter(LevelFilter::INFO))
                 .with(NopSubscriber.with_filter(LevelFilter::ERROR));
             assert_eq!(dbg!(collector).max_level_hint(), Some(LevelFilter::DEBUG));
