@@ -1,7 +1,7 @@
 pub(crate) use tracing_core::span::Id;
 
 #[derive(Debug)]
-struct ContextId {
+pub(crate) struct ContextId {
     id: Id,
     duplicate: bool,
 }
@@ -12,7 +12,7 @@ struct ContextId {
 /// can be executing in a different thread.
 #[derive(Debug, Default)]
 pub(crate) struct SpanStack {
-    stack: Vec<ContextId>,
+    pub(crate) stack: Vec<ContextId>,
 }
 
 impl SpanStack {

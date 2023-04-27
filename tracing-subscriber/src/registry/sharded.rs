@@ -265,13 +265,16 @@ impl Subscriber for Registry {
                 *refs = 1;
             })
             .expect("Unable to allocate another span");
-        idx_to_id(id)
+        let id = idx_to_id(id);
+        println!("[CREATED A NEW SPAN] id={id:?}");
+        id
     }
 
     /// This is intentionally not implemented, as recording fields
     /// on a span is the responsibility of layers atop of this registry.
     #[inline]
-    fn record(&self, _: &span::Id, _: &span::Record<'_>) {}
+    fn record(&self, _: &span::Id, _: &span::Record<'_>) {
+    }
 
     fn record_follows_from(&self, _span: &span::Id, _follows: &span::Id) {}
 
@@ -284,9 +287,15 @@ impl Subscriber for Registry {
 
     /// This is intentionally not implemented, as recording events
     /// is the responsibility of layers atop of this registry.
-    fn event(&self, _: &Event<'_>) {}
+    fn event(&self, e: &Event<'_>) {
+        println!("[GOT EVENT] parent={:?}", e.parent());
+    }
 
     fn enter(&self, id: &span::Id) {
+        let stack = self
+            .current_spans
+            .get_or_default();
+        println!("[ENTER SPAN] id={id:?}, depth={}", stack.borrow().stack.len());
         if self
             .current_spans
             .get_or_default()
@@ -362,6 +371,7 @@ impl Subscriber for Registry {
         // from std::Arc); this ensures that all other `try_close` calls on
         // other threads happen-before we actually remove the span.
         fence(Ordering::Acquire);
+        println!("[CLOSING SPAN] id={id:?}");
         true
     }
 }
