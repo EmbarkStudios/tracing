@@ -178,6 +178,11 @@ pub(crate) struct CloseGuard<'a> {
     registry: &'a Registry,
     is_closing: bool,
 }
+use std::sync::atomic::AtomicI64;
+
+pub static LIVE_SPANS: AtomicI64 = AtomicI64::new(0);
+pub static OPEN_SPANS: AtomicI64 = AtomicI64::new(0);
+pub static IN_SPANS: AtomicI64 = AtomicI64::new(0);
 
 impl Registry {
     fn get(&self, id: &Id) -> Option<Ref<'_, DataInner>> {
@@ -266,6 +271,8 @@ impl Subscriber for Registry {
             })
             .expect("Unable to allocate another span");
         let id = idx_to_id(id);
+        LIVE_SPANS.fetch_add(1, Ordering::Release);
+        OPEN_SPANS.fetch_add(1, Ordering::Release);
         id
     }
 
@@ -290,9 +297,6 @@ impl Subscriber for Registry {
     }
 
     fn enter(&self, id: &span::Id) {
-        let stack = self
-            .current_spans
-            .get_or_default();
         if self
             .current_spans
             .get_or_default()
@@ -301,6 +305,7 @@ impl Subscriber for Registry {
         {
             self.clone_span(id);
         }
+        IN_SPANS.fetch_add(1, Ordering::Release);
     }
 
     fn exit(&self, id: &span::Id) {
@@ -309,6 +314,7 @@ impl Subscriber for Registry {
                 dispatcher::get_default(|dispatch| dispatch.try_close(id.clone()));
             }
         }
+        IN_SPANS.fetch_sub(1, Ordering::Release);
     }
 
     fn clone_span(&self, id: &span::Id) -> span::Id {
@@ -368,6 +374,7 @@ impl Subscriber for Registry {
         // from std::Arc); this ensures that all other `try_close` calls on
         // other threads happen-before we actually remove the span.
         fence(Ordering::Acquire);
+        OPEN_SPANS.fetch_sub(1, Ordering::Release);
         true
     }
 }
@@ -415,6 +422,7 @@ impl<'a> Drop for CloseGuard<'a> {
             // span.
             if c == 1 && self.is_closing {
                 self.registry.spans.clear(id_to_idx(&self.id));
+                LIVE_SPANS.fetch_sub(1, Ordering::Release);
             }
         });
     }
