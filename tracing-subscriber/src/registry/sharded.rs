@@ -14,6 +14,7 @@ use std::{
     cell::{self, Cell, RefCell},
     sync::atomic::{fence, AtomicUsize, Ordering},
 };
+use std::hash::BuildHasherDefault;
 use tracing_core::{
     dispatcher::{self, Dispatch},
     span::{self, Current, Id},
@@ -179,13 +180,24 @@ pub(crate) struct CloseGuard<'a> {
     is_closing: bool,
 }
 use std::sync::atomic::AtomicI64;
+use dashmap::DashMap;
+use lazy_static::lazy_static;
+use rustc_hash::FxHasher;
 
+// pub static SPAN_TRACKER: Dash
 pub static LIVE_SPANS: AtomicI64 = AtomicI64::new(0);
 pub static OPEN_SPANS: AtomicI64 = AtomicI64::new(0);
-pub static FAILED_CLOSE_TOO_MANY_REFS: AtomicI64 = AtomicI64::new(0);
-pub static FAILED_CLOSE_PANICKING: AtomicI64 = AtomicI64::new(0);
-pub static FAILED_CLOSE_NOT_FOUND: AtomicI64 = AtomicI64::new(0);
 pub static IN_SPANS: AtomicI64 = AtomicI64::new(0);
+
+lazy_static! {
+    pub static ref SPAN_TRACKER: DashMap<Id, SpanInfo, BuildHasherDefault<FxHasher>> = DashMap::default();
+}
+
+#[derive(Debug, Default, Copy, Clone)]
+pub struct SpanInfo {
+    pub too_many_refs: usize,
+    pub panicking: usize,
+}
 
 impl Registry {
     fn get(&self, id: &Id) -> Option<Ref<'_, DataInner>> {
@@ -274,6 +286,7 @@ impl Subscriber for Registry {
             })
             .expect("Unable to allocate another span");
         let id = idx_to_id(id);
+        SPAN_TRACKER.insert(id.clone(), SpanInfo::default());
         LIVE_SPANS.fetch_add(1, Ordering::Release);
         OPEN_SPANS.fetch_add(1, Ordering::Release);
         id
@@ -339,6 +352,8 @@ impl Subscriber for Registry {
             "tried to clone a span ({:?}) that already closed",
             id
         );
+        let span_info = *SPAN_TRACKER.get(&id).unwrap();
+        SPAN_TRACKER.insert(id.clone(), span_info);
         id.clone()
     }
 
@@ -362,11 +377,10 @@ impl Subscriber for Registry {
         let span = match self.get(&id) {
             Some(span) => span,
             None if std::thread::panicking() => {
-                FAILED_CLOSE_PANICKING.fetch_add(1, Ordering::Release);
+                SPAN_TRACKER.get_mut(&id).unwrap().panicking += 1;
                 return false
             },
             None => {
-                FAILED_CLOSE_NOT_FOUND.fetch_add(1, Ordering::Release);
                 panic!("tried to drop a ref to {:?}, but no such span exists!", id)
             },
         };
@@ -376,7 +390,7 @@ impl Subscriber for Registry {
             assert!(refs < std::usize::MAX, "reference count overflow!");
         }
         if refs > 1 {
-            FAILED_CLOSE_TOO_MANY_REFS.fetch_add(1, Ordering::Release);
+            SPAN_TRACKER.get_mut(&id).unwrap().too_many_refs += 1;
             return false;
         }
 
@@ -384,6 +398,7 @@ impl Subscriber for Registry {
         // from std::Arc); this ensures that all other `try_close` calls on
         // other threads happen-before we actually remove the span.
         fence(Ordering::Acquire);
+        SPAN_TRACKER.remove(&id);
         OPEN_SPANS.fetch_sub(1, Ordering::Release);
         true
     }

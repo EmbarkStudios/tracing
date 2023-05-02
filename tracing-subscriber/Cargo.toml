@@ -38,6 +38,9 @@ valuable = ["tracing-core/valuable", "valuable_crate", "valuable-serde", "tracin
 local-time = ["time/local-offset"]
 
 [dependencies]
+dashmap = { version = "5.4.0" }
+rustc-hash = "1.1.0"
+lazy_static = "1.4.0"
 tracing-core = { path = "../tracing-core", version = "0.1.30", default-features = false }
 
 # only required by the filter feature

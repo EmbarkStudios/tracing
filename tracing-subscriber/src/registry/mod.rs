@@ -76,7 +76,7 @@ feature! {
 
     pub use sharded::Data;
     pub use sharded::Registry;
-    pub use sharded::{OPEN_SPANS, LIVE_SPANS, IN_SPANS, FAILED_CLOSE_TOO_MANY_REFS, FAILED_CLOSE_NOT_FOUND, FAILED_CLOSE_PANICKING};
+    pub use sharded::{OPEN_SPANS, LIVE_SPANS, IN_SPANS, SPAN_TRACKER};
 
     use crate::filter::FilterId;
 }
