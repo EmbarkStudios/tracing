@@ -193,10 +193,11 @@ lazy_static! {
     pub static ref SPAN_TRACKER: DashMap<Id, SpanInfo, BuildHasherDefault<FxHasher>> = DashMap::default();
 }
 
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct SpanInfo {
     pub too_many_refs: usize,
     pub panicking: usize,
+    pub metadata: &'static Metadata<'static>,
 }
 
 impl Registry {
@@ -286,7 +287,11 @@ impl Subscriber for Registry {
             })
             .expect("Unable to allocate another span");
         let id = idx_to_id(id);
-        SPAN_TRACKER.insert(id.clone(), SpanInfo::default());
+        SPAN_TRACKER.insert(id.clone(), SpanInfo {
+            too_many_refs: 0,
+            panicking: 0,
+            metadata: attrs.metadata(),
+        });
         LIVE_SPANS.fetch_add(1, Ordering::Release);
         OPEN_SPANS.fetch_add(1, Ordering::Release);
         id
