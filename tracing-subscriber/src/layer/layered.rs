@@ -197,7 +197,6 @@ where
             self.layer.on_close(id, self.ctx());
             true
         } else {
-            println!("[TRACING] - Failed to close span {id:?}");
             false
         }
     }

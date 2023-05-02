@@ -15,6 +15,7 @@ use std::{
     sync::atomic::{fence, AtomicUsize, Ordering},
 };
 use std::hash::BuildHasherDefault;
+use std::ops::Deref;
 use tracing_core::{
     dispatcher::{self, Dispatch},
     span::{self, Current, Id},
@@ -199,6 +200,7 @@ pub struct SpanInfo {
     pub panicking: usize,
     pub metadata: &'static Metadata<'static>,
     pub parent: Option<Id>,
+    pub values: String,
 }
 
 impl Registry {
@@ -293,6 +295,7 @@ impl Subscriber for Registry {
             panicking: 0,
             metadata: attrs.metadata(),
             parent,
+            values: attrs.values().to_string(),
         });
         LIVE_SPANS.fetch_add(1, Ordering::Release);
         OPEN_SPANS.fetch_add(1, Ordering::Release);
