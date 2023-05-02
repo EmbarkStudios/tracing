@@ -181,6 +181,7 @@ pub(crate) struct CloseGuard<'a> {
     is_closing: bool,
 }
 use std::sync::atomic::AtomicI64;
+use std::time::SystemTime;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use rustc_hash::FxHasher;
@@ -201,6 +202,7 @@ pub struct SpanInfo {
     pub metadata: &'static Metadata<'static>,
     pub parent: Option<Id>,
     pub values: String,
+    pub created_at: SystemTime,
 }
 
 impl Registry {
@@ -296,6 +298,7 @@ impl Subscriber for Registry {
             metadata: attrs.metadata(),
             parent,
             values: attrs.values().to_string(),
+            created_at: SystemTime::now(),
         });
         LIVE_SPANS.fetch_add(1, Ordering::Release);
         OPEN_SPANS.fetch_add(1, Ordering::Release);
