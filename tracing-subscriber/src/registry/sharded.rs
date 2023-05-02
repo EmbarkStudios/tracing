@@ -197,7 +197,7 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 pub struct SpanInfo {
-    pub too_many_refs: usize,
+    pub refs: usize,
     pub panicking: usize,
     pub metadata: &'static Metadata<'static>,
     pub parent: Option<Id>,
@@ -293,7 +293,7 @@ impl Subscriber for Registry {
             .expect("Unable to allocate another span");
         let id = idx_to_id(id);
         SPAN_TRACKER.insert(id.clone(), SpanInfo {
-            too_many_refs: 0,
+            refs: 1,
             panicking: 0,
             metadata: attrs.metadata(),
             parent,
@@ -359,7 +359,7 @@ impl Subscriber for Registry {
         // always at least 1. The only synchronization necessary is between
         // calls to `try_close`: we have to ensure that all threads have
         // dropped their refs to the span before the span is closed.
-        let refs = span.ref_count.fetch_add(1, Ordering::Relaxed);
+        let refs = span.ref_count.fetch_add(1, Ordering::AcqRel);
         assert_ne!(
             refs, 0,
             "tried to clone a span ({:?}) that already closed",
@@ -398,12 +398,12 @@ impl Subscriber for Registry {
             },
         };
 
-        let refs = span.ref_count.fetch_sub(1, Ordering::Release);
+        let refs = span.ref_count.fetch_sub(1, Ordering::AcqRel);
         if !std::thread::panicking() {
             assert!(refs < std::usize::MAX, "reference count overflow!");
         }
         if refs > 1 {
-            SPAN_TRACKER.get_mut(&id).unwrap().too_many_refs += 1;
+            SPAN_TRACKER.get_mut(&id).unwrap().refs = refs;
             return false;
         }
 
