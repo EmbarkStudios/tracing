@@ -15,8 +15,6 @@ use std::{
     sync::atomic::{fence, AtomicUsize, Ordering},
 };
 use std::hash::BuildHasherDefault;
-use std::num::NonZeroU64;
-use std::ops::Deref;
 use tracing_core::{
     dispatcher::{self, Dispatch},
     span::{self, Current, Id},
@@ -241,10 +239,6 @@ thread_local! {
     static CLOSE_COUNT: Cell<usize> = Cell::new(0);
 }
 
-lazy_static! {
-    static ref DEAD_ID: Id = Id::from_non_zero_u64(NonZeroU64::new(0xDEAD).expect("lol"));
-}
-
 impl Subscriber for Registry {
     fn register_callsite(&self, _: &'static Metadata<'static>) -> Interest {
         if self.has_per_layer_filters() {
@@ -263,10 +257,6 @@ impl Subscriber for Registry {
 
     #[inline]
     fn new_span(&self, attrs: &span::Attributes<'_>) -> span::Id {
-        if attrs.metadata().target() == "tokio::task" && attrs.metadata().name() == "runtime.spawn" {
-            println!("Deny tokio task span");
-            return DEAD_ID.clone();
-        }
         let parent = if attrs.is_root() {
             None
         } else if attrs.is_contextual() {
@@ -330,9 +320,6 @@ impl Subscriber for Registry {
     }
 
     fn enter(&self, id: &span::Id) {
-        if id == DEAD_ID.deref() {
-            return;
-        }
         if self
             .current_spans
             .get_or_default()
@@ -345,9 +332,6 @@ impl Subscriber for Registry {
     }
 
     fn exit(&self, id: &span::Id) {
-        if id == DEAD_ID.deref() {
-            return;
-        }
         if let Some(spans) = self.current_spans.get() {
             if spans.borrow_mut().pop(id) {
                 dispatcher::get_default(|dispatch| dispatch.try_close(id.clone()));
@@ -357,9 +341,6 @@ impl Subscriber for Registry {
     }
 
     fn clone_span(&self, id: &span::Id) -> span::Id {
-        if id == DEAD_ID.deref() {
-            return DEAD_ID.clone();
-        }
         let span = self
             .get(id)
             .unwrap_or_else(|| panic!(
@@ -400,9 +381,6 @@ impl Subscriber for Registry {
     ///
     /// The allocated span slot will be reused when a new span is created.
     fn try_close(&self, id: span::Id) -> bool {
-        if &id == DEAD_ID.deref() {
-            return true;
-        }
         let span = match self.get(&id) {
             Some(span) => span,
             None if std::thread::panicking() => {
