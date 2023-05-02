@@ -182,6 +182,7 @@ use std::sync::atomic::AtomicI64;
 
 pub static LIVE_SPANS: AtomicI64 = AtomicI64::new(0);
 pub static OPEN_SPANS: AtomicI64 = AtomicI64::new(0);
+pub static FAILED_CLOSE: AtomicI64 = AtomicI64::new(0);
 pub static IN_SPANS: AtomicI64 = AtomicI64::new(0);
 
 impl Registry {
@@ -358,8 +359,14 @@ impl Subscriber for Registry {
     fn try_close(&self, id: span::Id) -> bool {
         let span = match self.get(&id) {
             Some(span) => span,
-            None if std::thread::panicking() => return false,
-            None => panic!("tried to drop a ref to {:?}, but no such span exists!", id),
+            None if std::thread::panicking() => {
+                FAILED_CLOSE.fetch_add(1, Ordering::Release);
+                return false
+            },
+            None => {
+                FAILED_CLOSE.fetch_add(1, Ordering::Release);
+                panic!("tried to drop a ref to {:?}, but no such span exists!", id)
+            },
         };
 
         let refs = span.ref_count.fetch_sub(1, Ordering::Release);
@@ -367,6 +374,7 @@ impl Subscriber for Registry {
             assert!(refs < std::usize::MAX, "reference count overflow!");
         }
         if refs > 1 {
+            FAILED_CLOSE.fetch_add(1, Ordering::Release);
             return false;
         }
 
