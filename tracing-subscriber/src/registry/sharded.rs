@@ -193,11 +193,12 @@ lazy_static! {
     pub static ref SPAN_TRACKER: DashMap<Id, SpanInfo, BuildHasherDefault<FxHasher>> = DashMap::default();
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct SpanInfo {
     pub too_many_refs: usize,
     pub panicking: usize,
     pub metadata: &'static Metadata<'static>,
+    pub parent: Option<Id>,
 }
 
 impl Registry {
@@ -272,7 +273,7 @@ impl Subscriber for Registry {
             // allocated and added to the pool.
             .create_with(|data| {
                 data.metadata = attrs.metadata();
-                data.parent = parent;
+                data.parent = parent.clone();
                 data.filter_map = crate::filter::FILTERING.with(|filtering| filtering.filter_map());
                 #[cfg(debug_assertions)]
                 {
@@ -291,6 +292,7 @@ impl Subscriber for Registry {
             too_many_refs: 0,
             panicking: 0,
             metadata: attrs.metadata(),
+            parent,
         });
         LIVE_SPANS.fetch_add(1, Ordering::Release);
         OPEN_SPANS.fetch_add(1, Ordering::Release);
@@ -357,7 +359,7 @@ impl Subscriber for Registry {
             "tried to clone a span ({:?}) that already closed",
             id
         );
-        let span_info = *SPAN_TRACKER.get(&id).unwrap();
+        let span_info = SPAN_TRACKER.get(&id).unwrap().clone();
         SPAN_TRACKER.insert(id.clone(), span_info);
         id.clone()
     }
