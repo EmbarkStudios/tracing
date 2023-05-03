@@ -362,7 +362,7 @@ impl Subscriber for Registry {
         // always at least 1. The only synchronization necessary is between
         // calls to `try_close`: we have to ensure that all threads have
         // dropped their refs to the span before the span is closed.
-        let refs = span.ref_count.fetch_add(1, Ordering::AcqRel);
+        let refs = span.ref_count.fetch_add(1, Ordering::SeqCst);
         assert_ne!(
             refs, 0,
             "tried to clone a span ({:?}) that already closed",
@@ -401,7 +401,7 @@ impl Subscriber for Registry {
             },
         };
 
-        let refs = span.ref_count.fetch_sub(1, Ordering::AcqRel);
+        let refs = span.ref_count.fetch_sub(1, Ordering::SeqCst);
         SPAN_TRACKER.get_mut(&id).unwrap().refs = refs;
         if !std::thread::panicking() {
             assert!(refs < std::usize::MAX, "reference count overflow!");
