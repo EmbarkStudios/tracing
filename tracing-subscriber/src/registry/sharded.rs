@@ -407,7 +407,7 @@ impl Subscriber for Registry {
             assert!(refs < std::usize::MAX, "reference count overflow!");
         }
         if refs > 1 {
-            SPAN_TRACKER.get_mut(&id).unwrap().tried_close += refs;
+            SPAN_TRACKER.get_mut(&id).unwrap().tried_close += 1;
             return false;
         }
 
