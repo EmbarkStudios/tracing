@@ -14,6 +14,7 @@ use std::{
     cell::{self, Cell, RefCell},
     sync::atomic::{fence, AtomicUsize, Ordering},
 };
+use std::backtrace::Backtrace;
 use std::hash::BuildHasherDefault;
 use std::ops::Deref;
 use tracing_core::{
@@ -360,14 +361,13 @@ impl Subscriber for Registry {
         // calls to `try_close`: we have to ensure that all threads have
         // dropped their refs to the span before the span is closed.
         let refs = span.ref_count.fetch_add(1, Ordering::AcqRel);
-        SPAN_TRACKER.get_mut(&id).unwrap().refs = refs;
         assert_ne!(
             refs, 0,
             "tried to clone a span ({:?}) that already closed",
             id
         );
-        let span_info = SPAN_TRACKER.get(&id).unwrap().clone();
-        SPAN_TRACKER.insert(id.clone(), span_info);
+        let mut span_info = SPAN_TRACKER.get_mut(&id).unwrap();
+        span_info.refs = refs;
         id.clone()
     }
 
