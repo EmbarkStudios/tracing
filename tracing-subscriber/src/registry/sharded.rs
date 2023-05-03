@@ -198,6 +198,7 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 pub struct SpanInfo {
+    pub tried_close: usize,
     pub refs: usize,
     pub panicking: usize,
     pub metadata: &'static Metadata<'static>,
@@ -294,6 +295,7 @@ impl Subscriber for Registry {
             .expect("Unable to allocate another span");
         let id = idx_to_id(id);
         SPAN_TRACKER.insert(id.clone(), SpanInfo {
+            tried_close: 0,
             refs: 1,
             panicking: 0,
             metadata: attrs.metadata(),
@@ -405,6 +407,7 @@ impl Subscriber for Registry {
             assert!(refs < std::usize::MAX, "reference count overflow!");
         }
         if refs > 1 {
+            SPAN_TRACKER.get_mut(&id).unwrap().tried_close += refs;
             return false;
         }
 
