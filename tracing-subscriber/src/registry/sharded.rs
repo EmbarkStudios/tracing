@@ -182,6 +182,7 @@ pub(crate) struct CloseGuard<'a> {
     is_closing: bool,
 }
 use std::sync::atomic::AtomicI64;
+use std::thread::ThreadId;
 use std::time::SystemTime;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
@@ -197,8 +198,24 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone)]
+pub struct ThreadActionTime {
+    pub tid: ThreadId,
+    pub time: SystemTime,
+}
+
+impl ThreadActionTime {
+    pub fn now() -> Self {
+        Self {
+            tid: std::thread::current().id(),
+            time: SystemTime::now(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SpanInfo {
-    pub tried_close: usize,
+    pub cloned_at: Vec<ThreadActionTime>,
+    pub tried_close: Vec<ThreadActionTime>,
     pub refs: usize,
     pub panicking: usize,
     pub metadata: &'static Metadata<'static>,
@@ -295,7 +312,8 @@ impl Subscriber for Registry {
             .expect("Unable to allocate another span");
         let id = idx_to_id(id);
         SPAN_TRACKER.insert(id.clone(), SpanInfo {
-            tried_close: 0,
+            cloned_at: vec![],
+            tried_close: vec![],
             refs: 1,
             panicking: 0,
             metadata: attrs.metadata(),
@@ -369,7 +387,8 @@ impl Subscriber for Registry {
             id
         );
         let mut span_info = SPAN_TRACKER.get_mut(&id).unwrap();
-        span_info.refs = refs;
+        span_info.refs = refs + 1;
+        span_info.cloned_at.push(ThreadActionTime::now());
         id.clone()
     }
 
@@ -402,12 +421,13 @@ impl Subscriber for Registry {
         };
 
         let refs = span.ref_count.fetch_sub(1, Ordering::SeqCst);
-        SPAN_TRACKER.get_mut(&id).unwrap().refs = refs;
+        SPAN_TRACKER.get_mut(&id).unwrap().refs = refs - 1;
         if !std::thread::panicking() {
             assert!(refs < std::usize::MAX, "reference count overflow!");
         }
         if refs > 1 {
-            SPAN_TRACKER.get_mut(&id).unwrap().tried_close += 1;
+            SPAN_TRACKER.get_mut(&id).unwrap()
+                .tried_close.push(ThreadActionTime::now());
             return false;
         }
 
