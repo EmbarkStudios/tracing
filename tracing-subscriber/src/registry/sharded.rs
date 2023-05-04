@@ -321,8 +321,8 @@ impl Subscriber for Registry {
             values: attrs.values().to_string(),
             created_at: SystemTime::now(),
         });
-        LIVE_SPANS.fetch_add(1, Ordering::Release);
-        OPEN_SPANS.fetch_add(1, Ordering::Release);
+        LIVE_SPANS.fetch_add(1, Ordering::SeqCst);
+        OPEN_SPANS.fetch_add(1, Ordering::SeqCst);
         id
     }
 
@@ -355,7 +355,7 @@ impl Subscriber for Registry {
         {
             self.clone_span(id);
         }
-        IN_SPANS.fetch_add(1, Ordering::Release);
+        IN_SPANS.fetch_add(1, Ordering::SeqCst);
     }
 
     fn exit(&self, id: &span::Id) {
@@ -364,7 +364,7 @@ impl Subscriber for Registry {
                 dispatcher::get_default(|dispatch| dispatch.try_close(id.clone()));
             }
         }
-        IN_SPANS.fetch_sub(1, Ordering::Release);
+        IN_SPANS.fetch_sub(1, Ordering::SeqCst);
     }
 
     fn clone_span(&self, id: &span::Id) -> span::Id {
@@ -436,7 +436,7 @@ impl Subscriber for Registry {
         // other threads happen-before we actually remove the span.
         fence(Ordering::Acquire);
         SPAN_TRACKER.remove(&id);
-        OPEN_SPANS.fetch_sub(1, Ordering::Release);
+        OPEN_SPANS.fetch_sub(1, Ordering::SeqCst);
         true
     }
 }
@@ -484,7 +484,7 @@ impl<'a> Drop for CloseGuard<'a> {
             // span.
             if c == 1 && self.is_closing {
                 self.registry.spans.clear(id_to_idx(&self.id));
-                LIVE_SPANS.fetch_sub(1, Ordering::Release);
+                LIVE_SPANS.fetch_sub(1, Ordering::SeqCst);
             }
         });
     }
