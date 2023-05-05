@@ -15,6 +15,7 @@ use std::{
     sync::atomic::{fence, AtomicUsize, Ordering},
 };
 use std::backtrace::Backtrace;
+use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::ops::Deref;
 use tracing_core::{
@@ -212,10 +213,19 @@ impl ThreadActionTime {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum ThreadSpanAction {
+    CreateRef(ThreadId),
+    CloseRef(ThreadId),
+    FailCloseRef(ThreadId),
+}
+
 #[derive(Debug, Clone)]
 pub struct SpanInfo {
+    pub created_by: ThreadActionTime,
     pub cloned_at: Vec<ThreadActionTime>,
     pub tried_close: Vec<ThreadActionTime>,
+    pub event_seq: Vec<ThreadSpanAction>,
     pub refs: usize,
     pub panicking: usize,
     pub metadata: &'static Metadata<'static>,
@@ -312,8 +322,10 @@ impl Subscriber for Registry {
             .expect("Unable to allocate another span");
         let id = idx_to_id(id);
         SPAN_TRACKER.insert(id.clone(), SpanInfo {
+            created_by: ThreadActionTime::now(),
             cloned_at: vec![],
             tried_close: vec![],
+            event_seq: vec![ThreadSpanAction::CreateRef(std::thread::current().id())],
             refs: 1,
             panicking: 0,
             metadata: attrs.metadata(),
@@ -354,6 +366,8 @@ impl Subscriber for Registry {
             .push(id.clone())
         {
             self.clone_span(id);
+        } else {
+            println!("[SPAN STACK] FAIL CLONE id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         }
         println!("[SPAN STACK] AFTER ENTER id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         IN_SPANS.fetch_add(1, Ordering::SeqCst);
@@ -365,6 +379,7 @@ impl Subscriber for Registry {
                 println!("[SPAN STACK] EXIT POP SUCCESS id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
                 dispatcher::get_default(|dispatch| dispatch.try_close(id.clone()));
             } else {
+                SPAN_TRACKER.get_mut(id).unwrap().event_seq.push(ThreadSpanAction::FailCloseRef(std::thread::current().id()));
                 println!("[SPAN STACK] EXIT POP FAILURE id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
             }
         }
@@ -394,6 +409,7 @@ impl Subscriber for Registry {
         let mut span_info = SPAN_TRACKER.get_mut(&id).unwrap();
         span_info.refs = refs + 1;
         span_info.cloned_at.push(ThreadActionTime::now());
+        span_info.event_seq.push(ThreadSpanAction::CreateRef(std::thread::current().id()));
         id.clone()
     }
 
@@ -414,6 +430,7 @@ impl Subscriber for Registry {
     ///
     /// The allocated span slot will be reused when a new span is created.
     fn try_close(&self, id: span::Id) -> bool {
+        SPAN_TRACKER.get_mut(&id).unwrap().event_seq.push(ThreadSpanAction::CloseRef(std::thread::current().id()));
         let span = match self.get(&id) {
             Some(span) => span,
             None if std::thread::panicking() => {
