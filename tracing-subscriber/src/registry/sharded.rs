@@ -213,7 +213,7 @@ impl ThreadActionTime {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum ThreadSpanAction {
     CreateRef(ThreadId, CloneCause),
     CloseRef(ThreadId),
@@ -234,11 +234,17 @@ pub struct SpanInfo {
     pub created_at: SystemTime,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum CloneCause {
     New,
-    Ctx,
-    NewChild,
+    Ctx {
+        metadata: &'static Metadata<'static>,
+        values: String,
+    },
+    NewChild {
+        metadata: &'static Metadata<'static>,
+        values: String,
+    },
     Enter,
     UnknownDirectClone,
 }
@@ -328,9 +334,15 @@ impl Subscriber for Registry {
         let parent = if attrs.is_root() {
             None
         } else if attrs.is_contextual() {
-            self.current_span().id().map(|id| self.clone_span_internal(id, CloneCause::Ctx))
+            self.current_span().id().map(|id| self.clone_span_internal(id, CloneCause::Ctx {
+                metadata: attrs.metadata(),
+                values: attrs.values().to_string()
+            }))
         } else {
-            attrs.parent().map(|id| self.clone_span_internal(id, CloneCause::NewChild))
+            attrs.parent().map(|id| self.clone_span_internal(id, CloneCause::NewChild {
+                metadata: attrs.metadata(),
+                values: attrs.values().to_string()
+            }))
         };
 
         let id = self
@@ -412,7 +424,8 @@ impl Subscriber for Registry {
         if let Some(spans) = self.current_spans.get() {
             if spans.borrow_mut().pop(id) {
                 println!("[SPAN STACK] EXIT POP SUCCESS id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
-                dispatcher::get_default(|dispatch| dispatch.try_close(id.clone()));
+                //dispatcher::get_default(|dispatch| dispatch.try_close(id.clone()));
+                self.try_close(id.clone());
             } else {
                 SPAN_TRACKER.get_mut(id).unwrap().event_seq.push(ThreadSpanAction::FailCloseRef(std::thread::current().id()));
                 println!("[SPAN STACK] EXIT POP FAILURE id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
@@ -445,7 +458,6 @@ impl Subscriber for Registry {
     ///
     /// The allocated span slot will be reused when a new span is created.
     fn try_close(&self, id: span::Id) -> bool {
-        SPAN_TRACKER.get_mut(&id).unwrap().event_seq.push(ThreadSpanAction::CloseRef(std::thread::current().id()));
         let span = match self.get(&id) {
             Some(span) => span,
             None if std::thread::panicking() => {
@@ -458,6 +470,7 @@ impl Subscriber for Registry {
         };
 
         let refs = span.ref_count.fetch_sub(1, Ordering::SeqCst);
+        SPAN_TRACKER.get_mut(&id).unwrap().event_seq.push(ThreadSpanAction::CloseRef(std::thread::current().id()));
         SPAN_TRACKER.get_mut(&id).unwrap().refs = refs - 1;
         if !std::thread::panicking() {
             assert!(refs < std::usize::MAX, "reference count overflow!");
