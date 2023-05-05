@@ -382,6 +382,8 @@ impl Subscriber for Registry {
                 SPAN_TRACKER.get_mut(id).unwrap().event_seq.push(ThreadSpanAction::FailCloseRef(std::thread::current().id()));
                 println!("[SPAN STACK] EXIT POP FAILURE id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
             }
+        } else {
+            println!("[SPAN STACK] Get, span not present on this stack!")
         }
         println!("[SPAN STACK] AFTER EXIT id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         IN_SPANS.fetch_sub(1, Ordering::SeqCst);
