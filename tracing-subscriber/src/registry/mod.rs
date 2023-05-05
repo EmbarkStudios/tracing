@@ -76,7 +76,7 @@ feature! {
 
     pub use sharded::Data;
     pub use sharded::Registry;
-    pub use sharded::{OPEN_SPANS, LIVE_SPANS, IN_SPANS, SPAN_TRACKER, SpanInfo, ThreadSpanAction, ThreadActionTime};
+    pub use sharded::{OPEN_SPANS, LIVE_SPANS, IN_SPANS, SPAN_TRACKER, SpanInfo, ThreadSpanAction, ThreadActionTime, CloneCause};
 
     use crate::filter::FilterId;
 }

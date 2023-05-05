@@ -215,7 +215,7 @@ impl ThreadActionTime {
 
 #[derive(Debug, Copy, Clone)]
 pub enum ThreadSpanAction {
-    CreateRef(ThreadId),
+    CreateRef(ThreadId, CloneCause),
     CloseRef(ThreadId),
     FailCloseRef(ThreadId),
 }
@@ -232,6 +232,15 @@ pub struct SpanInfo {
     pub parent: Option<Id>,
     pub values: String,
     pub created_at: SystemTime,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum CloneCause {
+    New,
+    Ctx,
+    NewChild,
+    Enter,
+    UnknownDirectClone,
 }
 
 impl Registry {
@@ -261,6 +270,32 @@ impl Registry {
 
     pub(crate) fn span_stack(&self) -> cell::Ref<'_, SpanStack> {
         self.current_spans.get_or_default().borrow()
+    }
+
+    fn clone_span_internal(&self, id: &span::Id, cause: CloneCause) -> span::Id {
+        let span = self
+            .get(id)
+            .unwrap_or_else(|| panic!(
+                "tried to clone {:?}, but no span exists with that ID\n\
+                This may be caused by consuming a parent span (`parent: span`) rather than borrowing it (`parent: &span`).",
+                id,
+            ));
+        // Like `std::sync::Arc`, adds to the ref count (on clone) don't require
+        // a strong ordering; if we call` clone_span`, the reference count must
+        // always at least 1. The only synchronization necessary is between
+        // calls to `try_close`: we have to ensure that all threads have
+        // dropped their refs to the span before the span is closed.
+        let refs = span.ref_count.fetch_add(1, Ordering::SeqCst);
+        assert_ne!(
+            refs, 0,
+            "tried to clone a span ({:?}) that already closed",
+            id
+        );
+        let mut span_info = SPAN_TRACKER.get_mut(&id).unwrap();
+        span_info.refs = refs + 1;
+        span_info.cloned_at.push(ThreadActionTime::now());
+        span_info.event_seq.push(ThreadSpanAction::CreateRef(std::thread::current().id(), cause));
+        id.clone()
     }
 }
 
@@ -293,9 +328,9 @@ impl Subscriber for Registry {
         let parent = if attrs.is_root() {
             None
         } else if attrs.is_contextual() {
-            self.current_span().id().map(|id| self.clone_span(id))
+            self.current_span().id().map(|id| self.clone_span_internal(id, CloneCause::Ctx))
         } else {
-            attrs.parent().map(|id| self.clone_span(id))
+            attrs.parent().map(|id| self.clone_span_internal(id, CloneCause::NewChild))
         };
 
         let id = self
@@ -325,7 +360,7 @@ impl Subscriber for Registry {
             created_by: ThreadActionTime::now(),
             cloned_at: vec![],
             tried_close: vec![],
-            event_seq: vec![ThreadSpanAction::CreateRef(std::thread::current().id())],
+            event_seq: vec![ThreadSpanAction::CreateRef(std::thread::current().id(), CloneCause::New)],
             refs: 1,
             panicking: 0,
             metadata: attrs.metadata(),
@@ -365,7 +400,7 @@ impl Subscriber for Registry {
             .borrow_mut()
             .push(id.clone())
         {
-            self.clone_span(id);
+            self.clone_span_internal(id, CloneCause::Enter);
         } else {
             println!("[SPAN STACK] FAIL CLONE id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         }
@@ -390,29 +425,7 @@ impl Subscriber for Registry {
     }
 
     fn clone_span(&self, id: &span::Id) -> span::Id {
-        let span = self
-            .get(id)
-            .unwrap_or_else(|| panic!(
-                "tried to clone {:?}, but no span exists with that ID\n\
-                This may be caused by consuming a parent span (`parent: span`) rather than borrowing it (`parent: &span`).",
-                id,
-            ));
-        // Like `std::sync::Arc`, adds to the ref count (on clone) don't require
-        // a strong ordering; if we call` clone_span`, the reference count must
-        // always at least 1. The only synchronization necessary is between
-        // calls to `try_close`: we have to ensure that all threads have
-        // dropped their refs to the span before the span is closed.
-        let refs = span.ref_count.fetch_add(1, Ordering::SeqCst);
-        assert_ne!(
-            refs, 0,
-            "tried to clone a span ({:?}) that already closed",
-            id
-        );
-        let mut span_info = SPAN_TRACKER.get_mut(&id).unwrap();
-        span_info.refs = refs + 1;
-        span_info.cloned_at.push(ThreadActionTime::now());
-        span_info.event_seq.push(ThreadSpanAction::CreateRef(std::thread::current().id()));
-        id.clone()
+        self.clone_span_internal(id, CloneCause::UnknownDirectClone)
     }
 
     fn current_span(&self) -> Current {
@@ -464,6 +477,8 @@ impl Subscriber for Registry {
         true
     }
 }
+
+
 
 impl<'a> LookupSpan<'a> for Registry {
     type Data = Data<'a>;
