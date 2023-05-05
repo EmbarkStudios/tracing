@@ -355,15 +355,20 @@ impl Subscriber for Registry {
         {
             self.clone_span(id);
         }
+        println!("[SPAN STACK] AFTER ENTER id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         IN_SPANS.fetch_add(1, Ordering::SeqCst);
     }
 
     fn exit(&self, id: &span::Id) {
         if let Some(spans) = self.current_spans.get() {
             if spans.borrow_mut().pop(id) {
+                println!("[SPAN STACK] EXIT POP SUCCESS id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
                 dispatcher::get_default(|dispatch| dispatch.try_close(id.clone()));
+            } else {
+                println!("[SPAN STACK] EXIT POP FAILURE id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
             }
         }
+        println!("[SPAN STACK] AFTER EXIT id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         IN_SPANS.fetch_sub(1, Ordering::SeqCst);
     }
 
