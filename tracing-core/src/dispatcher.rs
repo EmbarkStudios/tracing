@@ -374,7 +374,10 @@ where
 
             f(&Dispatch::none())
         })
-        .unwrap_or_else(|_| f(&Dispatch::none()))
+        .unwrap_or_else(|e| {
+            println!("[SPAN STACK] Got none dispatch on tid={:?} {e}", std::thread::current().id());
+            f(&Dispatch::none())
+        })
 }
 
 /// Executes a closure with a reference to this thread's current [dispatcher].

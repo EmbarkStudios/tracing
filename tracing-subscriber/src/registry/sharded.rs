@@ -471,7 +471,7 @@ impl Subscriber for Registry {
         };
 
         let refs = span.ref_count.fetch_sub(1, Ordering::SeqCst);
-        println!("[SPAN STACK]: AFTER CLOSE DECREMENT id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
+        println!("[SPAN STACK] AFTER CLOSE DECREMENT refs={refs}, id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         SPAN_TRACKER.get_mut(&id).unwrap().event_seq.push(ThreadSpanAction::CloseRef(std::thread::current().id()));
         SPAN_TRACKER.get_mut(&id).unwrap().refs = refs - 1;
         if !std::thread::panicking() {
