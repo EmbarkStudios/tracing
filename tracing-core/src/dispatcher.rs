@@ -368,15 +368,15 @@ where
     CURRENT_STATE
         .try_with(|state| {
             if let Some(entered) = state.enter() {
-                println!("[SPAN STACK] Found default dispatch on tid={:?}", std::thread::current().id());
+                println!("[SPAN STACK] Found default dispatch on tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
                 return f(&*entered.current());
             }
-            println!("[SPAN STACK] Got none dispatch on tid={:?}", std::thread::current().id());
+            println!("[SPAN STACK] Got none dispatch on tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
 
             f(&Dispatch::none())
         })
         .unwrap_or_else(|e| {
-            println!("[SPAN STACK] Got none dispatch on tid={:?} {e}", std::thread::current().id());
+            println!("[SPAN STACK] Got none dispatch on tid={:?}, pid={:?}, {e}", std::thread::current().id(), std::process::id());
             f(&Dispatch::none())
         })
 }
@@ -818,11 +818,11 @@ impl<'a> Entered<'a> {
     fn current(&self) -> RefMut<'a, Dispatch> {
         let default = self.0.default.borrow_mut();
         RefMut::map(default, |default| {
-            println!("[SPAN STACK] Entered has current dispatch={}, tid={:?}", default.is_some(), std::thread::current().id());
+            println!("[SPAN STACK] Entered has current dispatch={}, tid={:?}, pid={:?}", default.is_some(), std::thread::current().id(), std::process::id());
             default.get_or_insert_with(|| {
-                println!("[SPAN STACK] Entered current is none, tid={:?}", std::thread::current().id());
+                println!("[SPAN STACK] Entered current is none, tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
                 get_global().cloned().unwrap_or_else(|| {
-                    println!("[SPAN STACK] Entered current was none, global was none, using none-dispatcher tid={:?}", std::thread::current().id());
+                    println!("[SPAN STACK] Entered current was none, global was none, using none-dispatcher tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
                     Dispatch::none()
                 })
             })

@@ -414,27 +414,27 @@ impl Subscriber for Registry {
         {
             self.clone_span_internal(id, CloneCause::Enter);
         } else {
-            println!("[SPAN STACK] FAIL CLONE id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
+            println!("[SPAN STACK] FAIL CLONE id={id:?}, tid={:?}, pid={:?}, stack_len={}, stack={:?}", std::thread::current().id(), std::process::id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         }
-        println!("[SPAN STACK] AFTER ENTER id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
+        println!("[SPAN STACK] AFTER ENTER id={id:?}, tid={:?}, pid={:?}, stack_len={}, stack={:?}", std::thread::current().id(), std::process::id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         IN_SPANS.fetch_add(1, Ordering::SeqCst);
     }
 
     fn exit(&self, id: &span::Id) {
         if let Some(spans) = self.current_spans.get() {
             if spans.borrow_mut().pop(id) {
-                println!("[SPAN STACK] EXIT POP SUCCESS id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
+                println!("[SPAN STACK] EXIT POP SUCCESS id={id:?}, tid={:?}, pid={:?}, stack_len={}, stack={:?}", std::thread::current().id(), std::process::id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
                 dispatcher::get_default(|dispatch| {
                     dispatch.try_close(id.clone())
                 });
             } else {
                 SPAN_TRACKER.get_mut(id).unwrap().event_seq.push(ThreadSpanAction::FailCloseRef(std::thread::current().id()));
-                println!("[SPAN STACK] EXIT POP FAILURE id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
+                println!("[SPAN STACK] EXIT POP FAILURE id={id:?}, tid={:?}, pid={:?}, stack_len={}, stack={:?}", std::thread::current().id(), std::process::id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
             }
         } else {
             println!("[SPAN STACK] Get, span not present on this stack!")
         }
-        println!("[SPAN STACK] AFTER EXIT id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
+        println!("[SPAN STACK] AFTER EXIT id={id:?}, tid={:?}, pid={:?}, stack_len={}, stack={:?}", std::thread::current().id(), std::process::id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         IN_SPANS.fetch_sub(1, Ordering::SeqCst);
     }
 
@@ -471,7 +471,7 @@ impl Subscriber for Registry {
         };
 
         let refs = span.ref_count.fetch_sub(1, Ordering::SeqCst);
-        println!("[SPAN STACK] AFTER CLOSE DECREMENT refs={refs}, id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
+        println!("[SPAN STACK] AFTER CLOSE DECREMENT refs={refs}, id={id:?}, tid={:?}, pid={:?}, stack_len={}, stack={:?}", std::thread::current().id(), std::process::id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
         SPAN_TRACKER.get_mut(&id).unwrap().event_seq.push(ThreadSpanAction::CloseRef(std::thread::current().id()));
         SPAN_TRACKER.get_mut(&id).unwrap().refs = refs - 1;
         if !std::thread::panicking() {
@@ -537,11 +537,11 @@ impl<'a> Drop for CloseGuard<'a> {
             // `on_close` call. If the span is closing, it's okay to remove the
             // span.
             if c == 1 && self.is_closing {
-                println!("[SPAN STACK] CLOSE GUARD DROP SUCCESS on id={:?}, tid={:?}", self.id, std::thread::current().id());
+                println!("[SPAN STACK] CLOSE GUARD DROP SUCCESS on id={:?}, tid={:?}, pid={:?}", self.id, std::thread::current().id(), std::process::id());
                 self.registry.spans.clear(id_to_idx(&self.id));
                 LIVE_SPANS.fetch_sub(1, Ordering::SeqCst);
             } else {
-                println!("[SPAN STACK] CLOSE GUARD DROP FAILURE on id={:?}, tid={:?}", self.id, std::thread::current().id());
+                println!("[SPAN STACK] CLOSE GUARD DROP FAILURE on id={:?}, tid={:?}, pid={:?}", self.id, std::thread::current().id(), std::process::id());
             }
         });
     }
