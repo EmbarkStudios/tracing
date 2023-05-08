@@ -537,8 +537,11 @@ impl<'a> Drop for CloseGuard<'a> {
             // `on_close` call. If the span is closing, it's okay to remove the
             // span.
             if c == 1 && self.is_closing {
+                println!("[SPAN STACK] CLOSE GUARD DROP SUCCESS on id={:?}, tid={:?}", self.id, std::thread::current().id());
                 self.registry.spans.clear(id_to_idx(&self.id));
                 LIVE_SPANS.fetch_sub(1, Ordering::SeqCst);
+            } else {
+                println!("[SPAN STACK] CLOSE GUARD DROP FAILURE on id={:?}, tid={:?}", self.id, std::thread::current().id());
             }
         });
     }

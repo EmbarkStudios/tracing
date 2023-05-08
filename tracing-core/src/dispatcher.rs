@@ -368,6 +368,7 @@ where
     CURRENT_STATE
         .try_with(|state| {
             if let Some(entered) = state.enter() {
+                println!("[SPAN STACK] Found default dispatch on tid={:?}", std::thread::current().id());
                 return f(&*entered.current());
             }
             println!("[SPAN STACK] Got none dispatch on tid={:?}", std::thread::current().id());
