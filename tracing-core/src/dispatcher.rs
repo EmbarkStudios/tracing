@@ -818,7 +818,14 @@ impl<'a> Entered<'a> {
     fn current(&self) -> RefMut<'a, Dispatch> {
         let default = self.0.default.borrow_mut();
         RefMut::map(default, |default| {
-            default.get_or_insert_with(|| get_global().cloned().unwrap_or_else(Dispatch::none))
+            println!("[SPAN STACK] Entered has current dispatch={}, tid={:?}", default.is_some(), std::thread::current().id());
+            default.get_or_insert_with(|| {
+                println!("[SPAN STACK] Entered current is none, tid={:?}", std::thread::current().id());
+                get_global().cloned().unwrap_or_else(|| {
+                    println!("[SPAN STACK] Entered current was none, global was none, using none-dispatcher tid={:?}", std::thread::current().id());
+                    Dispatch::none()
+                })
+            })
         })
     }
 }
