@@ -424,8 +424,7 @@ impl Subscriber for Registry {
         if let Some(spans) = self.current_spans.get() {
             if spans.borrow_mut().pop(id) {
                 println!("[SPAN STACK] EXIT POP SUCCESS id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
-                //dispatcher::get_default(|dispatch| dispatch.try_close(id.clone()));
-                self.try_close(id.clone());
+                dispatcher::get_default(|dispatch| dispatch.try_close(id.clone()));
             } else {
                 SPAN_TRACKER.get_mut(id).unwrap().event_seq.push(ThreadSpanAction::FailCloseRef(std::thread::current().id()));
                 println!("[SPAN STACK] EXIT POP FAILURE id={id:?}, tid={:?}, stack_len={}, stack={:?}", std::thread::current().id(),self.current_spans.get_or_default().borrow().stack.len(), self.current_spans.get_or_default().borrow().stack);
