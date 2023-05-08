@@ -195,7 +195,7 @@ thread_local! {
 }
 
 static EXISTS: AtomicBool = AtomicBool::new(false);
-static GLOBAL_INIT: AtomicUsize = AtomicUsize::new(UNINITIALIZED);
+pub static GLOBAL_INIT: AtomicUsize = AtomicUsize::new(UNINITIALIZED);
 
 const UNINITIALIZED: usize = 0;
 const INITIALIZING: usize = 1;
