@@ -706,7 +706,7 @@ pub(crate) mod tests;
 ///
 /// [`Subscriber`]: tracing_core::Subscriber
 #[cfg_attr(docsrs, doc(notable_trait))]
-pub trait Layer<S>
+pub trait Layer<S>:
 where
     S: Subscriber,
     Self: 'static,

@@ -155,11 +155,13 @@ where
     }
 
     fn enter(&self, span: &span::Id) {
+        println!("[LAYER]: ENTER id={span:?}, tid={:?}", std::thread::current().id());
         self.inner.enter(span);
         self.layer.on_enter(span, self.ctx());
     }
 
     fn exit(&self, span: &span::Id) {
+        println!("[LAYER]: EXIT id={span:?}, tid={:?}", std::thread::current().id());
         self.inner.exit(span);
         self.layer.on_exit(span, self.ctx());
     }
@@ -178,18 +180,23 @@ where
     }
 
     fn try_close(&self, id: span::Id) -> bool {
+        println!("[LAYER]: TRY_CLOSE id={id:?}, tid={:?}", std::thread::current().id());
         #[cfg(all(feature = "registry", feature = "std"))]
         let subscriber = &self.inner as &dyn Subscriber;
         #[cfg(all(feature = "registry", feature = "std"))]
         let mut guard = subscriber
             .downcast_ref::<Registry>()
-            .map(|registry| registry.start_close(id.clone()));
+            .map(|registry| {
+                println!("[LAYER]: REGISTRY START CLOSE id={id:?}, tid={:?}", std::thread::current().id());
+                registry.start_close(id.clone())
+            });
         if self.inner.try_close(id.clone()) {
             // If we have a registry's close guard, indicate that the span is
             // closing.
             #[cfg(all(feature = "registry", feature = "std"))]
             {
                 if let Some(g) = guard.as_mut() {
+                    println!("[LAYER]: LAYER TRY CLOSE SUCCESS id={id:?}, tid={:?}", std::thread::current().id());
                     g.set_closing()
                 };
             }
@@ -197,6 +204,7 @@ where
             self.layer.on_close(id, self.ctx());
             true
         } else {
+            println!("[LAYER]: LAYER TRY CLOSE FAIL id={id:?}, tid={:?}", std::thread::current().id());
             false
         }
     }
