@@ -370,6 +370,7 @@ where
             if let Some(entered) = state.enter() {
                 return f(&*entered.current());
             }
+            println!("[SPAN STACK] Got none dispatch on tid={:?}", std::thread::current().id());
 
             f(&Dispatch::none())
         })
@@ -838,7 +839,8 @@ impl Drop for DefaultGuard {
         // could then also attempt to access the same thread local
         // state -- causing a clash.
         let prev = CURRENT_STATE.try_with(|state| state.default.replace(self.0.take()));
-        drop(prev)
+        println!("[SPAN STACK]: DROPPED INTERMEDIATE DISPATCHER success={}", prev.is_ok());
+        drop(prev);
     }
 }
 
