@@ -305,6 +305,7 @@ pub fn set_global_default(dispatcher: Dispatch) -> Result<(), SetGlobalDefaultEr
         )
         .is_ok()
     {
+        println!("[SPAN STACK] SET GLOBAL DEFAULT DISPATCH tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
         unsafe {
             GLOBAL_DISPATCH = Some(dispatcher);
         }
@@ -427,8 +428,10 @@ where
 
 fn get_global() -> Option<&'static Dispatch> {
     if GLOBAL_INIT.load(Ordering::SeqCst) != INITIALIZED {
+        println!("[SPAN STACK] LOAD GLOBAL DISPATCH FAILED tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
         return None;
     }
+    println!("[SPAN STACK] LOAD GLOBAL DISPATCH SUCCESS tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
     unsafe {
         // This is safe given the invariant that setting the global dispatcher
         // also sets `GLOBAL_INIT` to `INITIALIZED`.
