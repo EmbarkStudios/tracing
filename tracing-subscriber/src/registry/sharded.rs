@@ -439,7 +439,7 @@ impl Subscriber for Registry {
     }
 
     fn clone_span(&self, id: &span::Id) -> span::Id {
-        println!("[SPAN CLONE] id={:?},tid={:?}, pid={:?}, Backtrace: {}", id, std::thread::current().id(), std::process::id(), std::backtrace::Backtrace::force_capture());
+        println!("[SPAN CLONE] id={:?},tid={:?}, pid={:?}, Backtrace: {}", id, std::thread::current().id(), std::process::id(), std::backtrace::Backtrace::force_capture().to_string().replace('\n', "[NL]"));
         self.clone_span_internal(id, CloneCause::UnknownDirectClone)
     }
 
