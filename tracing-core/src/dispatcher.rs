@@ -305,7 +305,7 @@ pub fn set_global_default(dispatcher: Dispatch) -> Result<(), SetGlobalDefaultEr
         )
         .is_ok()
     {
-        println!("[SPAN STACK] SET GLOBAL DEFAULT DISPATCH tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
+        // println!("[SPAN STACK] SET GLOBAL DEFAULT DISPATCH tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
         unsafe {
             GLOBAL_DISPATCH = Some(dispatcher);
         }
@@ -369,7 +369,7 @@ where
     CURRENT_STATE
         .try_with(|state| {
             if let Some(entered) = state.enter() {
-                println!("[SPAN STACK] Found default dispatch on tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
+                //println!("[SPAN STACK] Found default dispatch on tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
                 return f(&*entered.current());
             }
             println!("[SPAN STACK] Got none dispatch on tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
@@ -431,7 +431,7 @@ fn get_global() -> Option<&'static Dispatch> {
         println!("[SPAN STACK] LOAD GLOBAL DISPATCH FAILED tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
         return None;
     }
-    println!("[SPAN STACK] LOAD GLOBAL DISPATCH SUCCESS tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
+    //println!("[SPAN STACK] LOAD GLOBAL DISPATCH SUCCESS tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
     unsafe {
         // This is safe given the invariant that setting the global dispatcher
         // also sets `GLOBAL_INIT` to `INITIALIZED`.
@@ -821,7 +821,7 @@ impl<'a> Entered<'a> {
     fn current(&self) -> RefMut<'a, Dispatch> {
         let default = self.0.default.borrow_mut();
         RefMut::map(default, |default| {
-            println!("[SPAN STACK] Entered has current dispatch={}, tid={:?}, pid={:?}", default.is_some(), std::thread::current().id(), std::process::id());
+            //println!("[SPAN STACK] Entered has current dispatch={}, tid={:?}, pid={:?}", default.is_some(), std::thread::current().id(), std::process::id());
             default.get_or_insert_with(|| {
                 println!("[SPAN STACK] Entered current is none, tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
                 get_global().cloned().unwrap_or_else(|| {
@@ -853,7 +853,7 @@ impl Drop for DefaultGuard {
         // could then also attempt to access the same thread local
         // state -- causing a clash.
         let prev = CURRENT_STATE.try_with(|state| state.default.replace(self.0.take()));
-        println!("[SPAN STACK]: DROPPED INTERMEDIATE DISPATCHER success={}", prev.is_ok());
+        //println!("[SPAN STACK]: DROPPED INTERMEDIATE DISPATCHER success={}", prev.is_ok());
         drop(prev);
     }
 }
