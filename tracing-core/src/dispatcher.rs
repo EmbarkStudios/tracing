@@ -149,6 +149,7 @@ use alloc::sync::{Arc, Weak};
 
 #[cfg(feature = "alloc")]
 use core::ops::Deref;
+use std::ops::DerefMut;
 
 /// `Dispatch` trace data to a [`Subscriber`].
 #[derive(Clone)]
@@ -370,11 +371,11 @@ where
         .try_with(|state| {
             if let Some(entered) = state.enter() {
                 println!("[SPAN STACK] Found default dispatch on tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
-                return f(&*entered.current());
+                return entered.with_current(&mut f);
             }
             println!("[SPAN STACK] Got none dispatch on tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
 
-            f(&Dispatch::none())
+            (&mut f)(&Dispatch::none())
         })
         .unwrap_or_else(|e| {
             println!("[SPAN STACK] Got none dispatch on tid={:?}, pid={:?}, {e}", std::thread::current().id(), std::process::id());
@@ -396,7 +397,7 @@ pub fn get_current<T>(f: impl FnOnce(&Dispatch) -> T) -> Option<T> {
     CURRENT_STATE
         .try_with(|state| {
             let entered = state.enter()?;
-            Some(f(&*entered.current()))
+            Some(entered.with_current_once(f))
         })
         .ok()?
 }
@@ -813,23 +814,36 @@ impl State {
     }
 }
 
+
+
 // ===== impl Entered =====
 
 #[cfg(feature = "std")]
 impl<'a> Entered<'a> {
     #[inline]
-    fn current(&self) -> RefMut<'a, Dispatch> {
-        let default = self.0.default.borrow_mut();
-        RefMut::map(default, |default| {
-            println!("[SPAN STACK] Entered has current dispatch={}, tid={:?}, pid={:?}", default.is_some(), std::thread::current().id(), std::process::id());
-            default.get_or_insert_with(|| {
-                println!("[SPAN STACK] Entered current is none, tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
-                get_global().cloned().unwrap_or_else(|| {
-                    println!("[SPAN STACK] Entered current was none, global was none, using none-dispatcher tid={:?}, pid={:?}", std::thread::current().id(), std::process::id());
-                    Dispatch::none()
-                })
-            })
-        })
+    fn with_current<T, F: FnMut(&Dispatch) -> T>(&self, func: &mut F) -> T {
+        let mut default = self.0.default.borrow_mut();
+        if let Some(d) = default.as_ref() {
+            func(d)
+        } else if let Some(global) = get_global() {
+            default.replace(global.clone());
+            func(global)
+        } else {
+            func(&Dispatch::none())
+        }
+    }
+
+    #[inline]
+    fn with_current_once<T, F: FnOnce(&Dispatch) -> T>(&self, func: F) -> T {
+        let mut default = self.0.default.borrow_mut();
+        if let Some(d) = default.as_ref() {
+            func(d)
+        } else if let Some(global) = get_global() {
+            default.replace(global.clone());
+            func(global)
+        } else {
+            func(&Dispatch::none())
+        }
     }
 }
 
