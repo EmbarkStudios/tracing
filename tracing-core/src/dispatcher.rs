@@ -368,12 +368,12 @@ where
     CURRENT_STATE
         .try_with(|state| {
             if let Some(entered) = state.enter() {
-                return f(&entered.current());
+                return entered.with_current(&mut f);
             }
 
             f(&Dispatch::none())
         })
-        .unwrap_or_else(|_| f(&Dispatch::none()))
+        .unwrap_or_else(|_| (&mut f)(&Dispatch::none()))
 }
 
 /// Executes a closure with a reference to this thread's current [dispatcher].
@@ -390,7 +390,7 @@ pub fn get_current<T>(f: impl FnOnce(&Dispatch) -> T) -> Option<T> {
     CURRENT_STATE
         .try_with(|state| {
             let entered = state.enter()?;
-            Some(f(&entered.current()))
+            Some(entered.with_current(f))
         })
         .ok()?
 }
@@ -810,11 +810,16 @@ impl State {
 #[cfg(feature = "std")]
 impl<'a> Entered<'a> {
     #[inline]
-    fn current(&self) -> RefMut<'a, Dispatch> {
-        let default = self.0.default.borrow_mut();
-        RefMut::map(default, |default| {
-            default.get_or_insert_with(|| get_global().cloned().unwrap_or_else(Dispatch::none))
-        })
+    fn with_current<T>(&self, f: impl FnOnce(&Dispatch) -> T) -> T {
+        let mut default = self.0.default.borrow_mut();
+        if let Some(d) = default.as_ref() {
+            f(d)
+        } else if let Some(global) = get_global() {
+            default.replace(global.clone());
+            f(global)
+        } else {
+            f(&Dispatch::none())
+        }
     }
 }
 
