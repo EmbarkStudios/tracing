@@ -148,6 +148,58 @@
 extern crate alloc;
 
 #[doc(hidden)]
+#[cfg(feature = "hashed-metadata")]
+pub mod __macro_support {
+    pub const fn fnv1a_hash(data: &str) -> [u8; 16] {
+        let mut hash = 0xcbf29ce484222325;
+        let bytes = data.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            hash ^= bytes[i] as u64;
+            hash = hash.wrapping_mul(0x100000001b3);
+            i += 1;
+        }
+
+        const HEX_DIGITS: &[u8] = b"0123456789abcdef";
+        let mut buf = [0u8; 16];
+        i = 0;
+        while i < 16 {
+            buf[i] = HEX_DIGITS[(hash >> ((15 - i) * 4) & 0xf) as usize];
+            i += 1;
+        }
+        buf
+    }
+
+    #[macro_export]
+    macro_rules! file {
+        () => {
+            unsafe {
+                core::str::from_utf8_unchecked(&$crate::__macro_support::fnv1a_hash(core::file!()))
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! module_path {
+        () => {
+            unsafe {
+                core::str::from_utf8_unchecked(&$crate::__macro_support::fnv1a_hash(
+                    core::module_path!(),
+                ))
+            }
+        };
+    }
+
+    // Re-export the `core` functions that are used in macros. This allows
+    // a crate to be named `core` and avoid name clashes.
+    // See here: https://github.com/tokio-rs/tracing/issues/2761
+    pub use core::{line, option::Option};
+
+    pub use crate::{file, module_path};
+}
+
+#[doc(hidden)]
+#[cfg(not(feature = "hashed-metadata"))]
 pub mod __macro_support {
     // Re-export the `core` functions that are used in macros. This allows
     // a crate to be named `core` and avoid name clashes.
