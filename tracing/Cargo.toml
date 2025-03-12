@@ -66,6 +66,7 @@ std = ["tracing-core/std"]
 log-always = ["log"]
 attributes = ["tracing-attributes"]
 valuable = ["tracing-core/valuable"]
+hashed-metadata = ["tracing-core/hashed-metadata"]
 
 [[bench]]
 name = "baseline"
